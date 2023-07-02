@@ -4,15 +4,22 @@ use std::{env, fs, io};
 use std::path::Path;
 use ini::Ini;
 
+
+/// Struct store application infomation
 #[derive(std::fmt::Debug)]
 struct ApplicationEntry {
+    /// Path file of execution file
     filepath: String,
-    applicationName: String,
+    /// Name of application
+    application_name: String,
+    /// Command to run application
     command: String
 }
 
+/// Gets all .desktop files in a system
 fn get_desktop_dirs() -> Vec<String>{
     let mut dir_vec : Vec<String> = Vec::new();
+
     if env::var("HOME").is_ok() {
         let local_desktop_files = env::var("HOME").unwrap() + "/.local/share/applications";
         if Path::new(&local_desktop_files).exists() {
@@ -28,28 +35,34 @@ fn get_desktop_dirs() -> Vec<String>{
     return dir_vec;
 }
 
-fn get_appliactions(list_of_dirs: &Vec<String>) -> Vec<ApplicationEntry>{
+/// Converts .desktop files into structs
+fn get_applications(list_of_dirs: &Vec<String>) -> Vec<ApplicationEntry>{
     let mut temp: Vec<ApplicationEntry> = Vec::new();
     for dir in list_of_dirs {
-        let files = fs::read_dir(&dir).unwrap();
-        println!("Directory: {}", &dir);
-        for file in files {
-            let filePath = file.unwrap().path().into_os_string().into_string().unwrap();
-            let conf = Ini::load_from_file(
-                &filePath
-            ).unwrap();
-            let section = &conf.section(Some("Desktop Entry"));
-            if(section.is_some()){
-                let appName = section.unwrap().get("Name").unwrap_or("");
-                let appCommand = section.unwrap().get("Exec").unwrap_or("");
-                let newApp: ApplicationEntry = ApplicationEntry {
-                    filepath: filePath.to_string(), 
-                    applicationName: String::from(appName), 
-                    command: String::from(appCommand)
-                };
-                temp.push(newApp);
+        let files = fs::read_dir(&dir);
+        if files.is_ok(){
+            for file in files.unwrap() {
+                if file.is_ok() {
+                    let file_path = file.unwrap().path().into_os_string().into_string().unwrap();
+                    let conf = Ini::load_from_file(
+                        &file_path
+                    );
+                    if conf.is_ok() {
+                        let conf_unwrap = conf.unwrap();
+                        let section = &conf_unwrap.section(Some("Desktop Entry"));
+                        if section.is_some() {
+                            let app_name = section.unwrap().get("Name").unwrap_or("");
+                            let app_command = section.unwrap().get("Exec").unwrap_or("");
+                            let new_app: ApplicationEntry = ApplicationEntry {
+                                filepath: file_path.to_string(), 
+                                application_name: String::from(app_name), 
+                                command: String::from(app_command)
+                            };
+                            temp.push(new_app);
+                        }
+                    }
+                }
             }
-            //temp.push(&file.unwrap().path().to_str().unwrap());
         }
     }
     return temp;
@@ -57,21 +70,24 @@ fn get_appliactions(list_of_dirs: &Vec<String>) -> Vec<ApplicationEntry>{
 
 fn main() {
     let list_of_dirs = get_desktop_dirs();
-    let mut applications = get_appliactions(&list_of_dirs);
-    //println!("{:#?}", &list_of_dirs);
+    let applications = get_applications(&list_of_dirs);
     println!("{:#?}", &applications);
+    
     let mut user_input = String::new();
-    let stdin = io::stdin();
-    stdin.read_line(&mut user_input);
+    io::stdin().read_line(&mut user_input);
+    // Removes new line character at the end of input
     user_input = user_input.trim().to_owned();
-    let mut executeCommand : Vec<ApplicationEntry>  = applications
+
+    // Filters for specific application entry
+    let mut execute_command : Vec<ApplicationEntry>  = applications
         .into_iter()
-        .filter(|a| a.applicationName == user_input)
+        .filter(|a| a.application_name == user_input)
         .collect();
-    println!("{:?}", executeCommand);
-    Command::new(&mut executeCommand.pop().unwrap().command)
+    println!("{:?}", execute_command);
+
+    // Executes command (We set the output and error to /dev/null so we are not waiting on the program's output)
+    Command::new(&mut execute_command.pop().unwrap().command)
     .stdout(process::Stdio::null())
     .stderr(process::Stdio::null())
     .spawn();
-    //println!("Command to be executed: {}", executeCommand);
 }
