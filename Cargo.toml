@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 rust-ini = "0.19"
+eframe = "0.22.0"

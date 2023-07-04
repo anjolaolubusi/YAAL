@@ -1,93 +1,87 @@
-extern crate  ini;
+mod applications;
 use std::process::{Command, self};
-use std::{env, fs, io};
-use std::path::Path;
-use ini::Ini;
-
-
-/// Struct store application infomation
-#[derive(std::fmt::Debug)]
-struct ApplicationEntry {
-    /// Path file of execution file
-    filepath: String,
-    /// Name of application
-    application_name: String,
-    /// Command to run application
-    command: String
-}
-
-/// Gets all .desktop files in a system
-fn get_desktop_dirs() -> Vec<String>{
-    let mut dir_vec : Vec<String> = Vec::new();
-
-    if env::var("HOME").is_ok() {
-        let local_desktop_files = env::var("HOME").unwrap() + "/.local/share/applications";
-        if Path::new(&local_desktop_files).exists() {
-            dir_vec.push(local_desktop_files);
-        }
-        if Path::new("/usr/share/applications/").exists() {
-            dir_vec.push("/usr/share/applications/".to_owned());
-        }
-        if Path::new("/usr/local/share/applications/").exists() {
-            dir_vec.push("/usr/local/share/applications/".to_owned());
-        }
-    }
-    return dir_vec;
-}
-
-/// Converts .desktop files into structs
-fn get_applications(list_of_dirs: &Vec<String>) -> Vec<ApplicationEntry>{
-    let mut temp: Vec<ApplicationEntry> = Vec::new();
-    for dir in list_of_dirs {
-        let files = fs::read_dir(&dir);
-        if files.is_ok(){
-            for file in files.unwrap() {
-                if file.is_ok() {
-                    let file_path = file.unwrap().path().into_os_string().into_string().unwrap();
-                    let conf = Ini::load_from_file(
-                        &file_path
-                    );
-                    if conf.is_ok() {
-                        let conf_unwrap = conf.unwrap();
-                        let section = &conf_unwrap.section(Some("Desktop Entry"));
-                        if section.is_some() {
-                            let app_name = section.unwrap().get("Name").unwrap_or("");
-                            let app_command = section.unwrap().get("Exec").unwrap_or("");
-                            let new_app: ApplicationEntry = ApplicationEntry {
-                                filepath: file_path.to_string(), 
-                                application_name: String::from(app_name), 
-                                command: String::from(app_command)
-                            };
-                            temp.push(new_app);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return temp;
-}
+use std::{io};
+use applications::ApplicationEntry;
+use eframe::egui;
+use eframe::emath::Align2;
+use eframe::epaint::Color32;
 
 fn main() {
-    let list_of_dirs = get_desktop_dirs();
-    let applications = get_applications(&list_of_dirs);
-    println!("{:#?}", &applications);
+    let native_options = eframe::NativeOptions{
+        always_on_top: true,
+        centered: true,
+        fullscreen: true,
+        transparent: true,
+        ..Default::default()
+    };
     
-    let mut user_input = String::new();
-    io::stdin().read_line(&mut user_input);
-    // Removes new line character at the end of input
-    user_input = user_input.trim().to_owned();
+    eframe::run_native("YAAL", native_options, Box::new(|cc| Box::new(MyEguiApp::new(cc))));
 
-    // Filters for specific application entry
-    let mut execute_command : Vec<ApplicationEntry>  = applications
-        .into_iter()
-        .filter(|a| a.application_name == user_input)
-        .collect();
-    println!("{:?}", execute_command);
+    // // Executes command (We set the output and error to /dev/null so we are not waiting on the program's output)
+    // Command::new(&mut execute_command.pop().unwrap().command)
+    // .stdout(process::Stdio::null())
+    // .stderr(process::Stdio::null())
+    // .spawn();
+}
 
-    // Executes command (We set the output and error to /dev/null so we are not waiting on the program's output)
-    Command::new(&mut execute_command.pop().unwrap().command)
-    .stdout(process::Stdio::null())
-    .stderr(process::Stdio::null())
-    .spawn();
+
+#[derive(Default)]
+struct MyEguiApp {
+    applications: Vec<ApplicationEntry>,
+    user_input: String
+}
+
+impl MyEguiApp {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
+        // Restore app state using cc.storage (requires the "persistence" feature).
+        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
+        // for e.g. egui::PaintCallback.
+        Self::default()
+    }
+
+    fn default() -> Self {
+        let list_of_dirs = applications::get_desktop_dirs();
+        Self {
+            applications: applications::get_applications(&list_of_dirs),
+            user_input: "".to_owned()
+        }
+    }
+}
+
+impl eframe::App for MyEguiApp {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+
+        egui::Area::new("userInput")
+            .movable(false)
+            .pivot(Align2::LEFT_TOP)
+            .show(&ctx, |ui| {
+                ui.style_mut().visuals.extreme_bg_color = Color32::from_black_alpha(10);
+                let textInput = 
+                    egui::TextEdit::singleline(&mut self.user_input)
+                    .code_editor();
+                
+                let response = ui.add_sized([300.0, 20.0], textInput);
+                if ctx.input(|i| {
+                    i.focused
+                }) {
+                    response.request_focus()
+                }
+            });
+
+        egui::Area::new("ListOfPrograms")
+            .movable(false)
+            .anchor(Align2::CENTER_CENTER, [10.0, 10.0])
+            .show(&ctx, |ui| {
+                ui.style_mut().visuals.extreme_bg_color = Color32::from_black_alpha(32);
+                for app in &self.applications{
+                    let button = egui::Button::new(&app.application_name);
+                    let response = ui.add(button);
+                    if response.clicked() {
+                        println!("{} was clicked", &app.application_name);
+                        frame.close();
+                    }
+                }
+            });
+   }
 }
