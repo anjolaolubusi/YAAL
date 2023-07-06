@@ -4,7 +4,7 @@ use std::path::Path;
 use ini::Ini;
 
 /// Struct store application infomation
-#[derive(std::fmt::Debug)]
+#[derive(std::fmt::Debug, Clone)]
 pub struct ApplicationEntry {
     /// Path file of execution file
     pub filepath: String,

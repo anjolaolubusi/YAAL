@@ -6,6 +6,9 @@ use eframe::egui;
 use eframe::emath::Align2;
 use eframe::epaint::Color32;
 
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
+
 fn main() {
     let native_options = eframe::NativeOptions{
         always_on_top: true,
@@ -29,7 +32,8 @@ fn main() {
 struct MyEguiApp {
     applications: Vec<ApplicationEntry>,
     user_input: String,
-    isTyping: bool
+    isTyping: bool,
+    matcher : SkimMatcherV2
 }
 
 impl MyEguiApp {
@@ -43,10 +47,12 @@ impl MyEguiApp {
 
     fn default() -> Self {
         let list_of_dirs = applications::get_desktop_dirs();
+        let matcher = SkimMatcherV2::default();
         Self {
             applications: applications::get_applications(&list_of_dirs),
             user_input: "".to_owned(),
-            isTyping: false
+            isTyping: false,
+            matcher: matcher
         }
     }
 }
@@ -106,7 +112,11 @@ impl eframe::App for MyEguiApp {
             .anchor(Align2::CENTER_CENTER, [10.0, 10.0])
             .show(&ctx, |ui| {
                 ui.style_mut().visuals.extreme_bg_color = Color32::from_black_alpha(32);
-                for app in &self.applications{
+                let temp : Vec<ApplicationEntry> = match &self.user_input.as_str() {
+                    &""  => {self.applications.clone()},
+                    _ => {self.applications.clone().into_iter().filter(|app| self.matcher.fuzzy_match(app.application_name.to_lowercase().as_str(), self.user_input.to_lowercase().as_str()).is_some()).collect()}
+                };
+                for app in &temp{
                     let button = egui::Button::new(&app.application_name);
                     let response = ui.add(button);
                     if response.clicked() {
