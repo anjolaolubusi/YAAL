@@ -28,7 +28,8 @@ fn main() {
 #[derive(Default)]
 struct MyEguiApp {
     applications: Vec<ApplicationEntry>,
-    user_input: String
+    user_input: String,
+    isTyping: bool
 }
 
 impl MyEguiApp {
@@ -44,13 +45,27 @@ impl MyEguiApp {
         let list_of_dirs = applications::get_desktop_dirs();
         Self {
             applications: applications::get_applications(&list_of_dirs),
-            user_input: "".to_owned()
+            user_input: "".to_owned(),
+            isTyping: false
         }
     }
 }
 
 impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let list_of_events = ctx.input( |i| {
+            i.events.clone()
+        });
+
+        self.isTyping = ctx.input(|i| {
+            i.events
+                .iter()
+                .any(|ev| match ev {
+                   egui::Event::Text(_) => true,
+                   _ => false
+                })
+        });
+            
 
         egui::Area::new("userInput")
             .movable(false)
@@ -61,12 +76,29 @@ impl eframe::App for MyEguiApp {
                     egui::TextEdit::singleline(&mut self.user_input)
                     .code_editor();
                 
+
+
                 let response = ui.add_sized([300.0, 20.0], textInput);
-                if ctx.input(|i| {
-                    i.focused
-                }) {
-                    response.request_focus()
-                }
+                if self.isTyping {
+                    response.request_focus();
+                    let new_text = list_of_events.iter().find(|ev| match ev {
+                        egui::Event::Text(_) => true,
+                        _ => false
+                    });
+                    if let egui::Event::Text(val) = new_text.unwrap(){
+                        if !response.changed() {
+                            self.user_input += val;
+                            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), response.id) {
+                            let ccursor = egui::text::CCursor::new(self.user_input.chars().count());
+                            state.set_ccursor_range(Some(egui::text::CCursorRange::one(ccursor)));
+                            state.store(ui.ctx(), response.id);
+                            response.request_focus();
+                            }
+
+                        }
+                    }
+                } 
+
             });
 
         egui::Area::new("ListOfPrograms")
